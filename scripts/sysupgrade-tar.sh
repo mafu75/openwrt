@@ -3,6 +3,7 @@
 board=""
 kernel=""
 rootfs=""
+dtb=""
 outfile=""
 err=""
 
@@ -22,6 +23,12 @@ while [ "$1" ]; do
 		;;
 	"--rootfs")
 		rootfs="$2"
+		shift
+		shift
+		continue
+		;;
+	"--dtb")
+		dtb="$2"
 		shift
 		shift
 		continue
@@ -55,6 +62,7 @@ mkdir -p "${tmpdir}/sysupgrade-${board}"
 echo "BOARD=${board}" > "${tmpdir}/sysupgrade-${board}/CONTROL"
 [ -z "${rootfs}" ] || cp "${rootfs}" "${tmpdir}/sysupgrade-${board}/root"
 [ -z "${kernel}" ] || cp "${kernel}" "${tmpdir}/sysupgrade-${board}/kernel"
+[ -z "${dtb}" ] || cp "${dtb}" "${tmpdir}/sysupgrade-${board}/dtb"
 
 mtime=""
 if [ -n "$SOURCE_DATE_EPOCH" ]; then
