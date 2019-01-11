@@ -1,0 +1,273 @@
+From 3d22dbcfe7d4b16b4774d318833b38e465c39525 Mon Sep 17 00:00:00 2001
+From: Matthias Fuchs <mfuchs@ma-fu.de>
+Date: Thu, 3 Jan 2019 20:35:38 +0100
+Subject: [PATCH] misc: add gpio-7segment driver
+
+Signed-off-by: Matthias Fuchs <mfuchs@ma-fu.de>
+---
+ .../devicetree/bindings/misc/gpio-7seg.txt         |  26 +++
+ drivers/misc/Kconfig                               |  10 ++
+ drivers/misc/Makefile                              |   1 +
+ drivers/misc/gpio-7seg.c                           | 184 +++++++++++++++++++++
+ 4 files changed, 221 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/misc/gpio-7seg.txt
+ create mode 100644 drivers/misc/gpio-7seg.c
+
+diff --git a/Documentation/devicetree/bindings/misc/gpio-7seg.txt b/Documentation/devicetree/bindings/misc/gpio-7seg.txt
+new file mode 100644
+index 0000000..be54f0b
+--- /dev/null
++++ b/Documentation/devicetree/bindings/misc/gpio-7seg.txt
+@@ -0,0 +1,26 @@
++* 7-segment driver connected over GPIO through a BCD decoder
++
++Required properties:
++- compatible: "generic,gpio-7seg"
++- gpios: list of GPIOs to use to control the 7-segment display
++
++Optional properties:
++- default-value: default value shown by the 7-segment display at boot
++  time. If not defined, defaults to 0.
++
++Example:
++
++gpio-7seg at 0 {
++	compatible = "generic,gpio-7seg";
++	status = "okay";
++	gpios = <
++	      &gpio1 7 0
++	      &gpio1 8 0
++	      &gpio1 9 0
++	      &gpio1 10 0
++	      &gpio1 11 0
++	      &gpio1 12 0
++	      &gpio1 13 0
++	      >;
++	default-value = <5>;
++};
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index 64971ba..e8bef03 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -92,6 +92,16 @@ config DUMMY_IRQ
+ 	  The sole purpose of this module is to help with debugging of systems on
+ 	  which spurious IRQs would happen on disabled IRQ vector.
+ 
++config GPIO_7SEG
++	tristate "GPIO-connected 7-segment display driver"
++	help
++	  This option enables a driver to control 7-segment displays
++	  connected over separate GPIOs.
++
++	  Once this driver is enabled, it creates a 'value' field in
++	  the sysfs directory of the device, which allows to set the
++	  current value displayed by the 7-segment.
++
+ config IBM_ASM
+ 	tristate "Device driver for IBM RSA service processor"
+ 	depends on X86 && PCI && INPUT
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index 2bf79ba..931ca80 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -53,6 +53,7 @@ obj-$(CONFIG_ECHO)		+= echo/
+ obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
+ obj-$(CONFIG_CXL_BASE)		+= cxl/
+ obj-$(CONFIG_PANEL)             += panel.o
++obj-$(CONFIG_GPIO_7SEG)         += gpio-7seg.o
+ 
+ lkdtm-$(CONFIG_LKDTM)		+= lkdtm_core.o
+ lkdtm-$(CONFIG_LKDTM)		+= lkdtm_bugs.o
+diff --git a/drivers/misc/gpio-7seg.c b/drivers/misc/gpio-7seg.c
+new file mode 100644
+index 0000000..4179a3c
+--- /dev/null
++++ b/drivers/misc/gpio-7seg.c
+@@ -0,0 +1,184 @@
++/*
++ * Simple driver to control a 7 segment display connected through
++ * 7 GPIOs
++ *
++ * Copyright (C) 2012 Marvell
++ *
++ * Thomas Petazzoni <thomas.petazzoni at free-electrons.com>
++ *
++ * Copyright (C) 2016 Matthias Fuchs <mfuchs@ma-fu.de>
++ * converted to a 7-gpio driver
++ *
++ * This file is licensed under the terms of the GNU General Public
++ * License version 2.  This program is licensed "as is" without any
++ * warranty of any kind, whether express or implied.
++ */
++
++#include <linux/gpio.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_gpio.h>
++#include <linux/platform_device.h>
++
++struct gpio_7seg_dev {
++	struct device_attribute dev_attr;
++	int *gpios;
++	int ngpios;
++	int value;
++	int maxvalue;
++};
++
++static const int gpio_7seg_table[0x10] = {
++  0x7e, 0x30, 0x6d, 0x79,
++  0x33, 0x5b, 0x5f, 0x70,
++  0x7f, 0x7b, 0x77, 0x1f,
++  0x0d, 0x3d, 0x4f, 0x47
++};
++
++static void gpio_7seg_display_val(struct gpio_7seg_dev *sdev,
++				  int value)
++{
++	int i;
++	int code = gpio_7seg_table[value];
++	printk("value=%d, code=0x%02x\n", value, code);
++	for (i = 0; i < 7; i++) {
++	  int bitval = (code & (0x40 >> i)) ? 1 : 0;
++	  printk("gpio[%d]=%d\n", i, bitval);
++		gpio_set_value_cansleep(sdev->gpios[i], bitval);
++	}
++}
++
++static ssize_t gpio_7seg_show(struct device *dev, struct device_attribute *attr,
++			      char *buf)
++{
++	struct gpio_7seg_dev *sdev = dev_get_drvdata(dev);
++	return snprintf(buf, PAGE_SIZE, "%d\n", sdev->value);
++}
++
++static ssize_t gpio_7seg_store(struct device *dev, struct device_attribute *attr,
++			       const char *buf, size_t count)
++{
++	struct gpio_7seg_dev *sdev = dev_get_drvdata(dev);
++	unsigned long value;
++	char *end;
++
++	value = simple_strtoul(buf, &end, 0);
++	if (end == buf)
++		return -EINVAL;
++
++	if (value >= sdev->maxvalue)
++		return -EINVAL;
++
++	gpio_7seg_display_val(sdev, value);
++	sdev->value = value;
++
++	return count;
++}
++
++static int gpio_7seg_probe(struct platform_device *pdev)
++{
++	struct device_node *np = pdev->dev.of_node;
++	struct gpio_7seg_dev *sdev;
++	int ret, i;
++
++	/*
++	 * We only support being probed through the device tree, for
++	 * now
++	 */
++	if (!np)
++		return -EINVAL;
++
++	sdev = devm_kzalloc(&pdev->dev, sizeof(struct gpio_7seg_dev),
++			    GFP_KERNEL);
++	if (!sdev)
++		return -ENOMEM;
++
++	sdev->ngpios = of_gpio_count(np);
++	if (!sdev->ngpios)
++		return -EINVAL;
++
++	printk("n=%d\n", sdev->ngpios);
++	if (sdev->ngpios != 7)
++	  return -EINVAL;
++
++	sdev->gpios = devm_kzalloc(&pdev->dev, sizeof(int) * sdev->ngpios,
++				   GFP_KERNEL);
++	if (!sdev->gpios)
++		return -ENOMEM;
++
++	for (i = 0; i < sdev->ngpios; i++) {
++		sdev->gpios[i] = of_get_gpio(np, i);
++		ret = gpio_request_one(sdev->gpios[i], GPIOF_DIR_OUT, NULL);
++		if (ret) {
++			/*
++			 * Mark this GPIO as non-requested for the
++			 * error handling code
++			 */
++			sdev->gpios[i] = ret;
++			goto gpio_cleanup;
++		}
++	}
++
++	ret = of_property_read_u32(np, "default-value", &sdev->value);
++	if (ret)
++		sdev->value = 0;
++
++	sdev->maxvalue = 0x10;
++
++	sdev->dev_attr.attr.name = "value";
++	sdev->dev_attr.attr.mode = S_IRUGO | S_IWUGO;
++	sdev->dev_attr.show = gpio_7seg_show;
++	sdev->dev_attr.store = gpio_7seg_store;
++
++	ret = device_create_file(&pdev->dev, &sdev->dev_attr);
++	if (ret)
++		goto gpio_cleanup;
++
++	gpio_7seg_display_val(sdev, sdev->value);
++
++	platform_set_drvdata(pdev, sdev);
++	return 0;
++
++gpio_cleanup:
++	for (i = 0; i < sdev->ngpios; i++)
++		if (gpio_is_valid(sdev->gpios[i]))
++			gpio_free(sdev->gpios[i]);
++	return ret;
++}
++
++static int gpio_7seg_remove(struct platform_device *pdev)
++{
++	struct gpio_7seg_dev *sdev;
++	int i;
++
++	sdev = platform_get_drvdata(pdev);
++
++	device_remove_file(&pdev->dev, &sdev->dev_attr);
++
++	for (i = 0; i < sdev->ngpios; i++)
++		if (gpio_is_valid(sdev->gpios[i]))
++			gpio_free(sdev->gpios[i]);
++	return 0;
++}
++
++static const struct of_device_id gpio_7seg_of_match_table[] = {
++	{ .compatible = "generic,gpio-7seg" },
++	{},
++};
++
++static struct platform_driver gpio_7seg_driver = {
++	.probe  = gpio_7seg_probe,
++	.remove = gpio_7seg_remove,
++	.driver = {
++		.owner = THIS_MODULE,
++		.name  = "gpio-7seg",
++		.of_match_table = of_match_ptr(gpio_7seg_of_match_table),
++	},
++};
++
++module_platform_driver(gpio_7seg_driver);
++
++MODULE_AUTHOR("Thomas Petazzoni <thomas.petazzoni at free-electrons.com>");
++MODULE_DESCRIPTION("Simple GPIO-connected 7-segment display driver");
++MODULE_LICENSE("GPL");
+-- 
+2.7.4
+
