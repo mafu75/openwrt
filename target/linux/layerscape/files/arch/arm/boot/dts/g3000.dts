@@ -1,0 +1,364 @@
+/*
+ * Copyright 2013-2015 Freescale Semiconductor, Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ */
+
+/dts-v1/;
+#include "ls1021a.dtsi"
+
+/ {
+	model = "FTS G3000 Board";
+
+	aliases {
+		enet2_rgmii_phy = &rgmii_phy1;
+		enet0_sgmii_phy = &sgmii_phy2;
+		enet1_sgmii_phy = &sgmii_phy0;
+	};
+
+	sys_mclk: clock-mclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24576000>;
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3p3v: regulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "3P3V";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_gpio3_14 { // LED20
+			label = "g3000:red:d100_dp";
+			gpios = <&gpio2 14 0>;
+			linux,default-trigger = "none";
+		};
+		led_gpio3_13 { // LED21
+			label = "g3000:red:d110_dp";
+			gpios = <&gpio2 13 0>;
+			linux,default-trigger = "none";
+		};
+		led_gpio3_24 { // LED14
+			label = "g3000:red:led14";
+			gpios = <&gpio2 24 0>;
+			linux,default-trigger = "none";
+		};
+		led_gpio3_25 { // LED15
+			label = "g3000:green:led15";
+			gpios = <&gpio2 25 0>;
+			linux,default-trigger = "none";
+		};
+		led_gpio3_26 { // LED16
+			label = "g3000:blue:led16";
+			gpios = <&gpio2 26 0>;
+			linux,default-trigger = "none";
+		};
+		led_gpio3_27 { // LED17
+			label = "g3000:red:led17";
+			gpios = <&gpio2 27 0>;
+			linux,default-trigger = "none";
+		};
+		led_gpio3_19 { // LED18
+			label = "g3000:green:led18";
+			gpios = <&gpio2 19 0>;
+			linux,default-trigger = "none";
+		};
+		led_gpio3_20 { // LED19
+			label = "g3000:blue:led19";
+			gpios = <&gpio2 20 0>;
+			linux,default-trigger = "none";
+		};
+	};
+
+	gpio-7seg@0 {
+		  compatible = "generic,gpio-7seg";
+		  status = "okay";
+			gpios = <
+			&gpio3 9 0
+			&gpio3 10 0
+			&gpio3 11 0
+			&gpio3 12 0
+			&gpio3 13 0
+			&gpio3 14 0
+			&gpio3 15 0
+			>;
+		default-value = <0>;
+	};
+
+	gpio-7seg@1 {
+		  compatible = "generic,gpio-7seg";
+		  status = "okay";
+			gpios = <
+			&gpio3 16 0
+			&gpio3 17 0
+			&gpio3 18 0
+			&gpio3 19 0
+			&gpio3 20 0
+			&gpio3 21 0
+			&gpio3 22 0
+			>;
+		default-value = <0>;
+	};
+
+
+	gpio_keys {
+		  compatible = "gpio-keys";
+		  #address-cells = <1>;
+		  #size-cells = <0>;
+		  autorepeat;
+		  button@0 {
+			   label = "switch0";
+			   linux,code = <103>;
+			   gpios = <&gpio2 4 1>;
+		  };
+		  button@1 {
+			   label = "switch1";
+			   linux,code = <108>;
+			   gpios = <&gpio2 11 1>;
+		  };
+	};
+};
+
+&ifc {
+	status = "okay";
+	#address-cells = <2>;
+	#size-cells = <1>;
+
+	/* NOR, NAND Flashes and FPGA on board */
+	ranges = <0x0 0x0 0x0 0x60000000 0x00010000>;
+
+		nand@0,0 {
+			compatible = "fsl,ifc-nand";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			reg = <0x0 0x0 0x10000>;
+
+			partition@0 {
+				reg = <0x0 0x00800000>;
+				label = "kernel";
+			};
+			partition@800000 {
+				reg = <0x00800000 0x020000>;
+				label = "dtb";
+			};
+			partition@820000 {
+				reg = <0x00820000 0x1f7e0000>;
+				label = "filesystems";
+			};
+	       };
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&enet0 {
+	tbi-handle = <&tbi1>;
+	phy-handle = <&sgmii_phy2>;
+	phy-connection-type = "sgmii";
+	status = "okay";
+};
+
+&enet1 {
+	tbi-handle = <&tbi1>;
+	phy-handle = <&sgmii_phy0>;
+	phy-connection-type = "sgmii";
+	status = "okay";
+};
+
+&enet2 {
+	phy-handle = <&rgmii_phy1>;
+	phy-connection-type = "rgmii-id";
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+
+	ina220@40 {
+		compatible = "ti,ina220";
+		reg = <0x40>;
+		shunt-resistor = <1000>;
+	};
+
+	clockgen@69 {
+		compatible = "idt,6v49205b";
+		reg = <0x69>;
+	};
+};
+
+&i2c1 {
+	status = "okay";
+
+	pmicctrl@08 {
+		compatible = "fsl,mc34vr500v1";
+		reg = <0x08>;
+	};
+
+    eeprom@52 { //52..53
+		compatible = "at24,24c04";
+		reg = <0x52>;
+	};
+
+    tmp100@4a { // handled by lm75 driver
+	compatible = "ti,tmp100";
+	reg = <0x4a>;
+    };
+
+    tmp100@4e { // handled by lm75 driver
+	compatible = "ti,tmp100";
+	reg = <0x4e>;
+    };
+
+    adt7461a@4c { //handled by lm90 driver
+	compatible = "adt7461a", "adi,adt7461a";
+	reg = <0x4c>;
+    };
+};
+
+&ifc {
+	status = "okay";
+	#address-cells = <2>;
+	#size-cells = <1>;
+
+	/* NOR, NAND Flashes and FPGA on board */
+	ranges = <0x0 0x0 0x0 0x60000000 0x00010000>;
+
+		nand@0,0 {
+			compatible = "fsl,ifc-nand";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			reg = <0x0 0x0 0x10000>;
+
+			partition@0 {
+				reg = <0x0 0x00800000>;
+				label = "kernel";
+			};
+			partition@800000 {
+				reg = <0x00800000 0x020000>;
+				label = "dtb";
+			};
+			partition@820000 {
+				reg = <0x00820000 0x1f7e0000>;
+				label = "filesystems";
+			};
+		};
+};
+
+&lpuart0 {
+	status = "okay";
+};
+
+&mdio0 {
+	sgmii_phy0: ethernet-phy@0 {
+		reg = <0x0>;
+	};
+	rgmii_phy1: ethernet-phy@1 {
+		reg = <0x1>;
+	};
+	sgmii_phy2: ethernet-phy@2 {
+		reg = <0x2>;
+	};
+	tbi1: tbi-phy@1f {
+		reg = <0x1f>;
+		device_type = "tbi-phy";
+	};
+};
+
+/*
+&uqe {
+	tdma: ucc@2000 {
+		compatible = "fsl,ucc-tdm";
+		rx-clock-name = "clk8";
+		tx-clock-name = "clk9";
+		fsl,rx-sync-clock = "rsync_pin";
+		fsl,tx-sync-clock = "tsync_pin";
+		fsl,tx-timeslot = <0xfffffffe>;
+		fsl,rx-timeslot = <0xfffffffe>;
+		fsl,tdm-framer-type = "e1";
+		fsl,tdm-mode = "normal";
+		fsl,tdm-id = <0>;
+		fsl,siram-entry-id = <0>;
+	};
+
+	serial: ucc@2200 {
+		device_type = "serial";
+		compatible = "ucc_uart";
+		port-number = <1>;
+		rx-clock-name = "brg2";
+		tx-clock-name = "brg2";
+	};
+};
+*/
+
+&qspi {
+	num-cs = <2>;
+	status = "okay";
+
+	qflash0: n25q128a13@0 {
+		compatible = "n25q128a13", "jedec,spi-nor";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <20000000>;
+		reg = <0>;
+
+		partition@0 {
+			reg = <0x0 0x00010000>;
+			label = "rbl";
+		};
+		partition@10000 {
+			reg = <0x00010000 0x000f0000>;
+			label = "u-boot";
+		};
+		partition@100000 {
+			reg = <0x00100000 0x00002000>;
+			label = "env";
+		};
+		partition@102000 {
+			reg = <0x00102000 0x00efe000>;
+			label = "reserved";
+		};
+	};
+};
+
+&dspi1 {
+	bus-num = <0>;
+	status = "okay";
+
+	dspiflash: compatible@0 {
+		compatible = "st,m25p80";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <3000000>;
+		spi-cpol;
+		spi-cpha;
+		reg = <0>;
+	};
+};
+
+&sai1 {
+	status = "okay";
+};
+
+&usb2 {
+	status = "disabled";
+};
