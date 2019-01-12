@@ -38,15 +38,58 @@ platform_do_upgrade_traverse_nandubi() {
 	fw_setenv bootsys $newbootsys
 	echo "Upgrade complete"
 }
-platform_copy_config() {
-	bootsys=$(fw_printenv bootsys | awk -F= '{{print $2}}')
-	rootvol=rootfs$bootsys
-	volume_id=$(ubinfo -d 0 --name $rootvol | awk '/Volume ID/ {print $3}')
-	mkdir -p /mnt/oldsys
-	mount -t ubifs -o rw,noatime /dev/ubi0_$volume_id /mnt/oldsys
-	cp -af "$CONF_TAR" /mnt/oldsys
-	umount /mnt/oldsys
+
+platform_do_upgrade_g3000_nandubi() {
+        echo "platform_do_upgrade_g3000_nandubi started"
+
+        mkdir -p /tmp/image
+        cd /tmp/image
+        get_image "$1" > image.tar
+
+        mtd erase kernel
+        tar -xOf image.tar "sysupgrade-g3000-nand/kernel" | nandwrite -p /dev/mtd0 -
+        mtd erase dtb
+        tar -xOf image.tar "sysupgrade-g3000-nand/dtb" | nandwrite -p /dev/mtd1 -
+
+        volume_id=$(ubinfo -d 0 --name rootfs | awk '/Volume ID/ {print $3}')
+        file_size=$(tar -tvf image.tar "sysupgrade-g3000-nand/root" | awk '{{print $3}}')
+        tar -xOf image.tar "sysupgrade-g3000-nand/root" | ubiupdatevol -s $file_size /dev/ubi0_$volume_id -
 }
+
+platform_copy_config() {
+	local board=$(board_name)
+
+	case "$board" in
+
+	traverse,ls1043v | \
+	traverse,ls1043s | \
+	traverse,five64)
+	        bootsys=$(fw_printenv bootsys | awk -F= '{{print $2}}')
+	        rootvol=rootfs$bootsys
+	        volume_id=$(ubinfo -d 0 --name $rootvol | awk '/Volume ID/ {print $3}')
+	        mkdir -p /mnt/oldsys
+	        mount -t ubifs -o rw,noatime /dev/ubi0_$volume_id /mnt/oldsys
+	        cp -af "$CONF_TAR" /mnt/oldsys
+	        umount /mnt/oldsys
+	        return 0
+	        ;;
+
+	fsl,ls1021a)
+	        volume_id=$(ubinfo -d 0 --name rootfs | awk '/Volume ID/ {print $3}')
+		mkdir -p /mnt/oldsys
+		mount -t ubifs -o rw,noatime /dev/ubi0_$volume_id /mnt/oldsys
+	        cp -af "$CONF_TAR" /mnt/oldsys
+	        ls -l /mnt/oldsys
+	        umount /mnt/oldsys
+		return 0
+		;;
+	*)
+		echo "Sysupgrade is not currently supported on $board"
+		;;
+	esac
+	return 1
+}
+
 platform_check_image() {
 	local board=$(board_name)
 
@@ -63,6 +106,17 @@ platform_check_image() {
 		}
 		return 0
 		;;
+	fsl,ls1021a)
+		local tar_file="$1"
+		local kernel_length=$( (tar xf $tar_file sysupgrade-g3000-nand/kernel -O | wc -c) 2> /dev/null)
+		local rootfs_length=$( (tar xf $tar_file sysupgrade-g3000-nand/root -O | wc -c) 2> /dev/null)
+		local dtb_length=$( (tar xf $tar_file sysupgrade-g3000-nand/dtb -O | wc -c) 2> /dev/null)
+		[ "$kernel_length" -eq 0 -o "$rootfs_length" -eq 0 -o "$dtb_length" -eq 0 ] && {
+			echo "The upgrade image is corrupt."
+			return 1
+		}
+		return 0
+	        ;;
 	*)
 		echo "Sysupgrade is not currently supported on $board"
 		;;
@@ -79,6 +133,9 @@ platform_do_upgrade() {
 	traverse,five64)
 		platform_do_upgrade_traverse_nandubi "$ARGV"
 		;;
+	fsl,ls1021a)
+		platform_do_upgrade_g3000_nandubi "$ARGV"
+		;;
 	*)
 		echo "Sysupgrade is not currently supported on $board"
 		;;
@@ -89,6 +146,6 @@ platform_pre_upgrade() {
 	mkdir -p /var/lock
 	touch /var/lock/fw_printenv.lock
 	
-	export RAMFS_COPY_BIN="/usr/sbin/fw_printenv /usr/sbin/fw_setenv /usr/sbin/ubinfo /bin/echo ${RAMFS_COPY_BIN}"
+	export RAMFS_COPY_BIN="/usr/sbin/nandwrite /usr/sbin/fw_printenv /usr/sbin/fw_setenv /usr/sbin/ubinfo /bin/echo ${RAMFS_COPY_BIN}"
 	export RAMFS_COPY_DATA="/etc/fw_env.config /var/lock/fw_printenv.lock ${RAMFS_COPY_DATA}"
 }
