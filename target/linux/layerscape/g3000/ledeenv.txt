@@ -1,0 +1,8 @@
+ledemmc=mmc rescan;setenv bootcmd;run addcon;fatload mmc 0 82000000 ${zImageinitramfs};fatload mmc 0 8f000000 ${dtb};bootz 82000000 - 8f000000
+zImageinitramfs=openwrt-layerscape-armv7-g3000-nand-initramfs-kernel.bin
+dtb=openwrt-layerscape-armv7-g3000-nand-ubifs-factory_dtb.bin
+ledenand=run nandload nandargs addcon;bootz 82000000 - 8f000000
+nandload=nand read 82000000 0 800000;nand read 8f000000 800000 20000
+nandargs=setenv bootargs root=ubi0:rootfs rw ubi.mtd=filesystems rootfstype=ubifs rootwait=1
+addcon=setenv bootargs ${bootargs} console=ttyS0,115200
+bootcmd=run ledenand
