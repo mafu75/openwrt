@@ -1,0 +1,21 @@
+diff -Nru linux-4.9.135.orig/arch/arm/boot/dts/ls1021a.dtsi linux-4.9.135/arch/arm/boot/dts/ls1021a.dtsi
+--- linux-4.9.135.orig/arch/arm/boot/dts/ls1021a.dtsi	2018-11-13 20:30:43.636222609 +0100
++++ linux-4.9.135/arch/arm/boot/dts/ls1021a.dtsi	2018-11-14 20:19:46.335450019 +0100
+@@ -710,7 +710,7 @@
+ 			};
+ 		};
+ 
+-		usb@8600000 {
++		usb2: usb@8600000 {
+ 			compatible = "fsl-usb2-dr-v2.5", "fsl-usb2-dr";
+ 			reg = <0x0 0x8600000 0x0 0x1000>;
+ 			interrupts = <GIC_SPI 171 IRQ_TYPE_LEVEL_HIGH>;
+@@ -718,7 +718,7 @@
+ 			phy_type = "ulpi";
+ 		};
+ 
+-		usb3@3100000 {
++		usb3: usb3@3100000 {
+ 			compatible = "snps,dwc3";
+ 			reg = <0x0 0x3100000 0x0 0x10000>;
+ 			interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>;
